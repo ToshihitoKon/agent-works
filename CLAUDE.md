@@ -16,6 +16,7 @@ This repository is a Git repository for managing AI-generated tools. Each tool i
 - No universal rules apply across all tools in this project
 - Each tool follows its own rules defined in its directory's CLAUDE.md file
 - When adding new tools, create a dedicated directory directly under the project root
+- When adding new tools, update the root README.md to include the tool overview in the "Available Tools" section
 
 ## Working Guidelines
 
