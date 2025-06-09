@@ -1,4 +1,4 @@
-module go-tap-ton
+module github.com/ToshihitoKon/agent-works/go-tap-ton
 
 go 1.24.4
 
