@@ -12,15 +12,11 @@ A minimalist terminal-based tap tempo analyzer written in Go.
 
 ## Installation
 
-```bash
-go install github.com/ToshihitoKon/go-tap-ton@latest
-```
-
-Or clone and build:
+Clone the repository and build:
 
 ```bash
-git clone https://github.com/ToshihitoKon/go-tap-ton.git
-cd go-tap-ton
+git clone https://github.com/ToshihitoKon/agent-works.git
+cd agent-works/go-tap-ton
 go build
 ```
 

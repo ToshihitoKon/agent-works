@@ -1,4 +1,8 @@
-# Claude Development Notes
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with the go-tap-ton tool within the agent-works repository.
+
+## Claude Development Notes
 
 ## Project Overview
 A terminal-based tap tempo analyzer that measures timing between spacebar presses and calculates BPM with intelligent averaging.
