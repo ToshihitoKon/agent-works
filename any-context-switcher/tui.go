@@ -21,9 +21,11 @@ type model struct {
 	lastOutput   string
 	showOutput   bool
 	theme        ColorTheme
+	width        int
+	height       int
 }
 
-func getStyles(theme ColorTheme) (titleStyle, selectedStyle, topPanelStyle, bottomPanelStyle, outputTitleStyle lipgloss.Style) {
+func getStyles(theme ColorTheme, width, height int) (titleStyle, selectedStyle, topPanelStyle, bottomPanelStyle, outputTitleStyle lipgloss.Style) {
 	titleStyle = lipgloss.NewStyle().
 		MarginLeft(2).
 		Foreground(lipgloss.Color(theme.Title))
@@ -32,17 +34,29 @@ func getStyles(theme ColorTheme) (titleStyle, selectedStyle, topPanelStyle, bott
 		Foreground(lipgloss.Color(theme.Selected)).
 		Bold(true)
 
+	topHeight := height/2 - 2
+	bottomHeight := height - topHeight - 4
+	
+	if topHeight < 8 {
+		topHeight = 8
+	}
+	if bottomHeight < 5 {
+		bottomHeight = 5
+	}
+
 	topPanelStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(theme.Border)).
 		Padding(1, 2).
-		Height(15)
+		Width(width - 4).
+		Height(topHeight)
 
 	bottomPanelStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(theme.Border)).
 		Padding(1, 2).
-		Height(10)
+		Width(width - 4).
+		Height(bottomHeight)
 
 	outputTitleStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color(theme.OutputTitle)).
@@ -66,6 +80,8 @@ func (t *TUI) Run() error {
 		lastOutput:  "Ready to execute commands...",
 		showOutput:  true,
 		theme:       t.executor.config.Theme,
+		width:       80,
+		height:      24,
 	}
 
 	p := tea.NewProgram(&m, tea.WithAltScreen())
@@ -79,6 +95,10 @@ func (m *model) Init() tea.Cmd {
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -147,7 +167,16 @@ func (m *model) View() string {
 	var topContent strings.Builder
 	var bottomContent strings.Builder
 
-	titleStyle, selectedStyle, topPanelStyle, bottomPanelStyle, outputTitleStyle := getStyles(m.theme)
+	titleStyle, selectedStyle, topPanelStyle, bottomPanelStyle, outputTitleStyle := getStyles(m.theme, m.width, m.height)
+	
+	topHeight := m.height/2 - 2
+	bottomHeight := m.height - topHeight - 4
+	if topHeight < 8 {
+		topHeight = 8
+	}
+	if bottomHeight < 5 {
+		bottomHeight = 5
+	}
 
 	topContent.WriteString(titleStyle.Render("Context Switcher"))
 	topContent.WriteString("\n\n")
@@ -155,7 +184,35 @@ func (m *model) View() string {
 	if len(m.contexts) == 0 {
 		topContent.WriteString("No contexts available.")
 	} else {
-		for i, context := range m.contexts {
+		// Calculate available space for context list
+		// topHeight is the content area height set by lipgloss
+		// Account for: Title (1) + Empty line (1) + Help text (1) = 3
+		availableLines := topHeight - 3
+		if availableLines < 1 {
+			availableLines = 1
+		}
+		
+		// Show contexts around cursor position
+		startIdx := 0
+		endIdx := len(m.contexts)
+		
+		if len(m.contexts) > availableLines {
+			startIdx = m.cursor - availableLines/2
+			if startIdx < 0 {
+				startIdx = 0
+			}
+			endIdx = startIdx + availableLines
+			if endIdx > len(m.contexts) {
+				endIdx = len(m.contexts)
+				startIdx = endIdx - availableLines
+				if startIdx < 0 {
+					startIdx = 0
+				}
+			}
+		}
+
+		for i := startIdx; i < endIdx; i++ {
+			context := m.contexts[i]
 			cursor := " "
 			if m.cursor == i {
 				cursor = ">"
@@ -182,6 +239,16 @@ func (m *model) View() string {
 			if context.Description != "" {
 				line += fmt.Sprintf(" - %s", context.Description)
 			}
+			
+			// Truncate long lines to fit within panel  
+			// Width set in style - padding left/right (2*2=4)
+			maxLineWidth := m.width - 4 - 4  // total width - borders - padding
+			if maxLineWidth < 10 {
+				maxLineWidth = 10
+			}
+			if len(line) > maxLineWidth {
+				line = line[:maxLineWidth-3] + "..."
+			}
 
 			topContent.WriteString(style.Render(line))
 			topContent.WriteString("\n")
@@ -193,7 +260,38 @@ func (m *model) View() string {
 	bottomContent.WriteString(outputTitleStyle.Render("Command Output"))
 	bottomContent.WriteString("\n")
 	bottomContent.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	bottomContent.WriteString(m.lastOutput)
+	
+	output := m.lastOutput
+	contentWidth := m.width - 4 - 4  // total width - borders - padding
+	contentHeight := bottomHeight - 4  // title + separator + spacing + buffer
+	
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+	
+	// Split into lines and wrap long lines
+	var processedLines []string
+	for _, line := range strings.Split(output, "\n") {
+		if len(line) <= contentWidth {
+			processedLines = append(processedLines, line)
+		} else {
+			// Wrap long lines
+			for i := 0; i < len(line); i += contentWidth {
+				end := i + contentWidth
+				if end > len(line) {
+					end = len(line)
+				}
+				processedLines = append(processedLines, line[i:end])
+			}
+		}
+	}
+	
+	// Limit to available height (show from beginning)
+	if len(processedLines) > contentHeight {
+		processedLines = processedLines[:contentHeight]
+	}
+	
+	bottomContent.WriteString(strings.Join(processedLines, "\n"))
 
 	topPanel := topPanelStyle.Render(topContent.String())
 	bottomPanel := bottomPanelStyle.Render(bottomContent.String())
