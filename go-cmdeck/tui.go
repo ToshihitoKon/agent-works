@@ -169,7 +169,7 @@ func (m *model) View() string {
 		bottomHeight = 5
 	}
 
-	topContent.WriteString(titleStyle.Render("Context Switcher"))
+	topContent.WriteString(titleStyle.Render("Job Deck"))
 	topContent.WriteString("\n\n")
 
 	if len(m.contexts) == 0 {

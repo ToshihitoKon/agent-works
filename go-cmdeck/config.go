@@ -41,7 +41,7 @@ func getConfigPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(homeDir, ".config", "any-context-switcher", "config.json"), nil
+	return filepath.Join(homeDir, ".config", "go-cmdeck", "config.json"), nil
 }
 
 func loadConfig() (*Config, error) {

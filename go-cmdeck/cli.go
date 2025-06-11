@@ -31,8 +31,8 @@ func (c *CLI) Run(args []string) error {
 		return c.showCurrent()
 	case "switch", "sw":
 		if len(args) < 3 {
-			fmt.Fprintf(os.Stderr, "Usage: %s switch <context-name>\n", args[0])
-			return fmt.Errorf("context name required")
+			fmt.Fprintf(os.Stderr, "Usage: %s switch <job-name>\n", args[0])
+			return fmt.Errorf("job name required")
 		}
 		return c.switchContext(args[2])
 	case "run":
@@ -45,8 +45,8 @@ func (c *CLI) Run(args []string) error {
 		return c.addContext(args[2:])
 	case "remove", "rm":
 		if len(args) < 3 {
-			fmt.Fprintf(os.Stderr, "Usage: %s remove <context-name>\n", args[0])
-			return fmt.Errorf("context name required")
+			fmt.Fprintf(os.Stderr, "Usage: %s remove <job-name>\n", args[0])
+			return fmt.Errorf("job name required")
 		}
 		return c.removeContext(args[2])
 	case "tui":
@@ -62,32 +62,32 @@ func (c *CLI) Run(args []string) error {
 }
 
 func (c *CLI) showUsage() {
-	fmt.Printf(`Usage: any-context-switcher <command> [arguments]
+	fmt.Printf(`Usage: go-cmdeck <command> [arguments]
 
 Commands:
-  init                  Initialize configuration with example contexts
-  list, ls              List all contexts
-  current               Show current context
-  switch, sw <name>     Switch to context
+  init                  Initialize configuration with example jobs
+  list, ls              List all jobs
+  current               Show current job
+  switch, sw <name>     Switch to job
   run <name>            Execute job with execution history
-  add                   Add new context (interactive)
-  remove, rm <name>     Remove context
+  add                   Add new job (interactive)
+  remove, rm <name>     Remove job
   tui                   Start TUI mode
   help                  Show this help
 
 Examples:
-  any-context-switcher init
-  any-context-switcher list
-  any-context-switcher run monitoring
-  any-context-switcher tui
+  go-cmdeck init
+  go-cmdeck list
+  go-cmdeck run monitoring
+  go-cmdeck tui
 `)
 }
 
 func (c *CLI) listContexts() error {
-	contexts := c.executor.listContexts()
+	jobs := c.executor.listContexts()
 	
-	if len(contexts) == 0 {
-		fmt.Println("No contexts configured")
+	if len(jobs) == 0 {
+		fmt.Println("No jobs configured")
 		return nil
 	}
 
@@ -96,15 +96,15 @@ func (c *CLI) listContexts() error {
 	fmt.Fprintln(w, "----\t-----\t--------\t-----------")
 
 	current := c.executor.getCurrentContext()
-	for _, context := range contexts {
+	for _, job := range jobs {
 		marker := " "
-		if current != nil && current.Name == context.Name {
+		if current != nil && current.Name == job.Name {
 			marker = "*"
 		}
 		
 		lastRun := "Never"
-		if context.LastResult != nil {
-			if context.LastResult.Success {
+		if job.LastResult != nil {
+			if job.LastResult.Success {
 				lastRun = "✓ Success"
 			} else {
 				lastRun = "✗ Failed"
@@ -112,7 +112,7 @@ func (c *CLI) listContexts() error {
 		}
 		
 		fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\n", 
-			marker, context.Name, context.Label, lastRun, context.Description)
+			marker, job.Name, job.Label, lastRun, job.Description)
 	}
 	
 	return w.Flush()
@@ -121,11 +121,11 @@ func (c *CLI) listContexts() error {
 func (c *CLI) showCurrent() error {
 	current := c.executor.getCurrentContext()
 	if current == nil {
-		fmt.Println("No context is currently active")
+		fmt.Println("No job is currently active")
 		return nil
 	}
 
-	fmt.Printf("Current context: %s\n", current.Name)
+	fmt.Printf("Current job: %s\n", current.Name)
 	fmt.Printf("Label: %s\n", current.Label)
 	if current.Description != "" {
 		fmt.Printf("Description: %s\n", current.Description)
@@ -150,23 +150,23 @@ func (c *CLI) switchContext(name string) error {
 		return err
 	}
 	
-	fmt.Printf("Switched to context: %s\n", name)
+	fmt.Printf("Switched to job: %s\n", name)
 	return nil
 }
 
 func (c *CLI) runJob(name string) error {
-	context, exists := c.executor.config.Contexts[name]
+	job, exists := c.executor.config.Contexts[name]
 	if !exists {
 		return fmt.Errorf("job '%s' not found", name)
 	}
 
-	runCmd, exists := context.Commands["run"]
+	runCmd, exists := job.Commands["run"]
 	if !exists {
 		return fmt.Errorf("job '%s' has no run command", name)
 	}
 
-	fmt.Printf("Executing job: %s\n", context.Label)
-	output, exitCode, err := c.executor.executeJobWithOutput(runCmd, context.Variables)
+	fmt.Printf("Executing job: %s\n", job.Label)
+	output, exitCode, err := c.executor.executeJobWithOutput(runCmd, job.Variables)
 	
 	// Save execution result
 	result := &ExecutionResult{
@@ -176,8 +176,8 @@ func (c *CLI) runJob(name string) error {
 		Output:    output,
 	}
 	
-	context.LastResult = result
-	c.executor.config.Contexts[name] = context
+	job.LastResult = result
+	c.executor.config.Contexts[name] = job
 	c.executor.config.save()
 	
 	fmt.Printf("\nJob execution completed:\n")
@@ -202,11 +202,11 @@ func (c *CLI) addContext(args []string) error {
 	fs.Parse(args)
 	
 	if *name == "" || *label == "" {
-		fmt.Fprintf(os.Stderr, "Usage: any-context-switcher add -name <name> -label <label> [-description <desc>]\n")
+		fmt.Fprintf(os.Stderr, "Usage: go-cmdeck add -name <name> -label <label> [-description <desc>]\n")
 		return fmt.Errorf("name and label are required")
 	}
 
-	context := Context{
+	job := Context{
 		Name:        *name,
 		Label:       *label,
 		Description: *description,
@@ -214,18 +214,18 @@ func (c *CLI) addContext(args []string) error {
 		Variables:   make(map[string]string),
 	}
 
-	c.executor.config.Contexts[*name] = context
+	c.executor.config.Contexts[*name] = job
 	if err := c.executor.config.save(); err != nil {
 		return err
 	}
 
-	fmt.Printf("Added context: %s\n", *name)
+	fmt.Printf("Added job: %s\n", *name)
 	return nil
 }
 
 func (c *CLI) removeContext(name string) error {
 	if _, exists := c.executor.config.Contexts[name]; !exists {
-		return fmt.Errorf("context '%s' not found", name)
+		return fmt.Errorf("job '%s' not found", name)
 	}
 
 	delete(c.executor.config.Contexts, name)
@@ -238,7 +238,7 @@ func (c *CLI) removeContext(name string) error {
 		return err
 	}
 
-	fmt.Printf("Removed context: %s\n", name)
+	fmt.Printf("Removed job: %s\n", name)
 	return nil
 }
 
@@ -343,14 +343,14 @@ func (c *CLI) initConfig() error {
 	}
 
 	fmt.Printf("Configuration initialized at: %s\n", configPath)
-	fmt.Println("Example tool contexts created:")
+	fmt.Println("Example tool jobs created:")
 	fmt.Println("  - docker: Docker Services")
 	fmt.Println("  - vpn: VPN Connection")
 	fmt.Println("  - database: Database Tunnel")
 	fmt.Println("  - monitoring: System Monitoring (active)")
 	fmt.Println("  - proxy: HTTP Proxy")
-	fmt.Println("\nRun 'any-context-switcher list' to see all contexts.")
-	fmt.Println("Run 'any-context-switcher tui' to use the interactive interface.")
+	fmt.Println("\nRun 'go-cmdeck list' to see all jobs.")
+	fmt.Println("Run 'go-cmdeck tui' to use the interactive interface.")
 
 	return nil
 }

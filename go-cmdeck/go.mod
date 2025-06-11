@@ -1,4 +1,4 @@
-module github.com/ToshihitoKon/agent-works/any-context-switcher
+module github.com/ToshihitoKon/agent-works/go-cmdeck
 
 go 1.23.1
 
