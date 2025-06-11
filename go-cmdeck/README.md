@@ -43,9 +43,6 @@ chmod +x go-cmdeck
 # Start interactive TUI mode
 ./go-cmdeck tui
 
-# Show current job details
-./go-cmdeck current
-
 # Add a new job
 ./go-cmdeck add -name "backup" -label "Database Backup" -description "Daily backup job"
 ```
@@ -56,8 +53,7 @@ chmod +x go-cmdeck
 |---------|-------------|
 | `init` | Initialize configuration with example jobs |
 | `list`, `ls` | List all jobs with execution status |
-| `current` | Show current job with execution details |
-| `execute`, `exec <name>` | Execute job in context |
+| `execute`, `exec <name>` | Execute job and record execution history |
 | `run <name>` | Execute job and record execution history |
 | `add` | Add new job (interactive) |
 | `remove`, `rm <name>` | Remove job |
@@ -86,7 +82,6 @@ Configuration is stored in `~/.config/go-cmdeck/config.json`:
 
 ```json
 {
-  "current_context": "job-name",
   "contexts": {
     "monitoring": {
       "name": "monitoring",

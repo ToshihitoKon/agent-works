@@ -27,20 +27,18 @@ func (c *CLI) Run(args []string) error {
 		return c.initConfig()
 	case "list", "ls":
 		return c.listContexts()
-	case "current":
-		return c.showCurrent()
 	case "execute", "exec":
 		if len(args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: %s execute <job-name>\n", args[0])
 			return fmt.Errorf("job name required")
 		}
-		return c.executeContext(args[2])
+		return c.executeJob(args[2])
 	case "run":
 		if len(args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: %s run <job-name>\n", args[0])
 			return fmt.Errorf("job name required")
 		}
-		return c.runJob(args[2])
+		return c.executeJob(args[2])
 	case "add":
 		return c.addContext(args[2:])
 	case "remove", "rm":
@@ -67,8 +65,7 @@ func (c *CLI) showUsage() {
 Commands:
   init                  Initialize configuration with example jobs
   list, ls              List all jobs
-  current               Show current job
-  execute, exec <name>  Set active job context
+  execute, exec <name>  Execute job with execution history
   run <name>            Execute job with execution history
   add                   Add new job (interactive)
   remove, rm <name>     Remove job
@@ -95,13 +92,7 @@ func (c *CLI) listContexts() error {
 	fmt.Fprintln(w, "NAME\tLABEL\tLAST RUN\tDESCRIPTION")
 	fmt.Fprintln(w, "----\t-----\t--------\t-----------")
 
-	current := c.executor.getCurrentContext()
 	for _, job := range jobs {
-		marker := " "
-		if current != nil && current.Name == job.Name {
-			marker = "*"
-		}
-		
 		lastRun := "Never"
 		if job.LastResult != nil {
 			if job.LastResult.Success {
@@ -111,50 +102,14 @@ func (c *CLI) listContexts() error {
 			}
 		}
 		
-		fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\n", 
-			marker, job.Name, job.Label, lastRun, job.Description)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", 
+			job.Name, job.Label, lastRun, job.Description)
 	}
 	
 	return w.Flush()
 }
 
-func (c *CLI) showCurrent() error {
-	current := c.executor.getCurrentContext()
-	if current == nil {
-		fmt.Println("No job is currently active")
-		return nil
-	}
-
-	fmt.Printf("Current job: %s\n", current.Name)
-	fmt.Printf("Label: %s\n", current.Label)
-	if current.Description != "" {
-		fmt.Printf("Description: %s\n", current.Description)
-	}
-	
-	if current.LastResult != nil {
-		fmt.Printf("Last execution: %s\n", current.LastResult.Timestamp.Format("2006-01-02 15:04:05"))
-		if current.LastResult.Success {
-			fmt.Printf("Status: ✓ Success (Exit Code: %d)\n", current.LastResult.ExitCode)
-		} else {
-			fmt.Printf("Status: ✗ Failed (Exit Code: %d)\n", current.LastResult.ExitCode)
-		}
-	} else {
-		fmt.Printf("Status: Never executed\n")
-	}
-	
-	return nil
-}
-
-func (c *CLI) executeContext(name string) error {
-	if err := c.executor.executeContext(name); err != nil {
-		return err
-	}
-	
-	fmt.Printf("Set active job context: %s\n", name)
-	return nil
-}
-
-func (c *CLI) runJob(name string) error {
+func (c *CLI) executeJob(name string) error {
 	job, exists := c.executor.config.Contexts[name]
 	if !exists {
 		return fmt.Errorf("job '%s' not found", name)
@@ -229,10 +184,6 @@ func (c *CLI) removeContext(name string) error {
 	}
 
 	delete(c.executor.config.Contexts, name)
-	
-	if c.executor.config.CurrentContext == name {
-		c.executor.config.CurrentContext = ""
-	}
 
 	if err := c.executor.config.save(); err != nil {
 		return err
@@ -266,7 +217,6 @@ func (c *CLI) initConfig() error {
 	}
 
 	exampleConfig := &Config{
-		CurrentContext: "",
 		Theme: ColorTheme{
 			Title:       "205",
 			Selected:    "199", 

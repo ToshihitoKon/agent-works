@@ -31,9 +31,8 @@ type ColorTheme struct {
 }
 
 type Config struct {
-	CurrentContext string             `json:"current_context"`
-	Contexts       map[string]Context `json:"contexts"`
-	Theme          ColorTheme         `json:"theme"`
+	Contexts map[string]Context `json:"contexts"`
+	Theme    ColorTheme         `json:"theme"`
 }
 
 func getConfigPath() (string, error) {
@@ -52,8 +51,7 @@ func loadConfig() (*Config, error) {
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return &Config{
-			CurrentContext: "",
-			Contexts:       make(map[string]Context),
+			Contexts: make(map[string]Context),
 			Theme: ColorTheme{
 				Title:       "205",
 				Selected:    "199",

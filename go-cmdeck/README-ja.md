@@ -43,9 +43,6 @@ chmod +x go-cmdeck
 # インタラクティブTUIモード開始
 ./go-cmdeck tui
 
-# 現在のジョブ詳細を表示
-./go-cmdeck current
-
 # 新しいジョブを追加
 ./go-cmdeck add -name "backup" -label "データベースバックアップ" -description "日次バックアップジョブ"
 ```
@@ -56,8 +53,7 @@ chmod +x go-cmdeck
 |---------|-------------|
 | `init` | サンプルジョブで設定を初期化 |
 | `list`, `ls` | 実行ステータス付き全ジョブ一覧表示 |
-| `current` | 実行詳細付き現在のジョブを表示 |
-| `execute`, `exec <name>` | コンテキストでジョブを実行 |
+| `execute`, `exec <name>` | ジョブを実行して実行履歴を記録 |
 | `run <name>` | ジョブを実行して実行履歴を記録 |
 | `add` | 新しいジョブを追加（インタラクティブ） |
 | `remove`, `rm <name>` | ジョブを削除 |
@@ -86,7 +82,6 @@ TUI（ターミナルユーザーインターフェース）はジョブの管�
 
 ```json
 {
-  "current_context": "job-name",
   "contexts": {
     "monitoring": {
       "name": "monitoring",

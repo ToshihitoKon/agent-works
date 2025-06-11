@@ -18,16 +18,6 @@ func NewExecutor(config *Config) *Executor {
 	return &Executor{config: config}
 }
 
-func (e *Executor) executeContext(contextName string) error {
-	_, exists := e.config.Contexts[contextName]
-	if !exists {
-		return fmt.Errorf("job '%s' not found", contextName)
-	}
-
-	e.config.CurrentContext = contextName
-	return e.config.save()
-}
-
 func (e *Executor) executeCommand(command string, variables map[string]string) error {
 	expandedCommand := e.expandVariables(command, variables)
 	
@@ -46,18 +36,6 @@ func (e *Executor) expandVariables(command string, variables map[string]string) 
 		result = strings.ReplaceAll(result, placeholder, value)
 	}
 	return result
-}
-
-func (e *Executor) getCurrentContext() *Context {
-	if e.config.CurrentContext == "" {
-		return nil
-	}
-	
-	if context, exists := e.config.Contexts[e.config.CurrentContext]; exists {
-		return &context
-	}
-	
-	return nil
 }
 
 func (e *Executor) executeCommandWithOutput(command string, variables map[string]string) (string, error) {

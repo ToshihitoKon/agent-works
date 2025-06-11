@@ -32,8 +32,7 @@ Go CmDeck is a Rundeck-style CLI/TUI job execution management tool written in Go
 
 - `go-cmdeck init`: Initialize configuration with example jobs
 - `go-cmdeck list`: List all jobs with execution status
-- `go-cmdeck current`: Show current job with execution details
-- `go-cmdeck execute <name>`: Set active job context
+- `go-cmdeck execute <name>`: Execute job and record execution history
 - `go-cmdeck run <name>`: Execute job and record execution history
 - `go-cmdeck add`: Add new job
 - `go-cmdeck remove <name>`: Remove job
@@ -43,7 +42,6 @@ Go CmDeck is a Rundeck-style CLI/TUI job execution management tool written in Go
 
 ```json
 {
-  "current_context": "job-name",
   "contexts": {
     "job-name": {
       "name": "job-name",
