@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 type Executor struct {
@@ -82,19 +83,49 @@ func (e *Executor) executeCommandWithOutput(command string, variables map[string
 	
 	err := cmd.Run()
 	
-	output := stdout.String()
-	if stderr.Len() > 0 {
-		if output != "" {
-			output += "\n"
+	// Get exit status code
+	exitCode := 0
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+				exitCode = status.ExitStatus()
+			}
 		}
-		output += "STDERR:\n" + stderr.String()
 	}
 	
-	if output == "" && err == nil {
-		output = "(no output)"
+	// Build detailed output
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Command: %s\n", expandedCommand))
+	result.WriteString(fmt.Sprintf("Exit Code: %d\n", exitCode))
+	result.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	
+	stdoutStr := stdout.String()
+	stderrStr := stderr.String()
+	
+	if stdoutStr != "" {
+		result.WriteString("STDOUT:\n")
+		result.WriteString(stdoutStr)
+		if !strings.HasSuffix(stdoutStr, "\n") {
+			result.WriteString("\n")
+		}
 	}
 	
-	return output, err
+	if stderrStr != "" {
+		if stdoutStr != "" {
+			result.WriteString("\n")
+		}
+		result.WriteString("STDERR:\n")
+		result.WriteString(stderrStr)
+		if !strings.HasSuffix(stderrStr, "\n") {
+			result.WriteString("\n")
+		}
+	}
+	
+	if stdoutStr == "" && stderrStr == "" {
+		result.WriteString("(no output)")
+	}
+	
+	return result.String(), err
 }
 
 func (e *Executor) listContexts() []Context {
