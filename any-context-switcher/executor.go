@@ -24,19 +24,13 @@ func (e *Executor) switchContext(contextName string) error {
 		return fmt.Errorf("context '%s' not found", contextName)
 	}
 
-	if activateCmd, exists := context.Commands["activate"]; exists {
-		if err := e.executeCommand(activateCmd, context.Variables); err != nil {
-			context.LastError = true
-			e.config.Contexts[contextName] = context
-			e.config.save()
-			return fmt.Errorf("failed to execute activate command: %w", err)
+	if runCmd, exists := context.Commands["run"]; exists {
+		if err := e.executeCommand(runCmd, context.Variables); err != nil {
+			return fmt.Errorf("failed to execute run command: %w", err)
 		}
 	}
 
 	e.config.CurrentContext = contextName
-	context.LastError = false
-	e.config.Contexts[contextName] = context
-
 	return e.config.save()
 }
 
@@ -126,6 +120,62 @@ func (e *Executor) executeCommandWithOutput(command string, variables map[string
 	}
 	
 	return result.String(), err
+}
+
+func (e *Executor) executeJobWithOutput(command string, variables map[string]string) (string, int, error) {
+	expandedCommand := e.expandVariables(command, variables)
+	
+	cmd := exec.Command("sh", "-c", expandedCommand)
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	
+	// Get exit status code
+	exitCode := 0
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+				exitCode = status.ExitStatus()
+			}
+		}
+	}
+	
+	// Build detailed output
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Command: %s\n", expandedCommand))
+	result.WriteString(fmt.Sprintf("Exit Code: %d\n", exitCode))
+	result.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	
+	stdoutStr := stdout.String()
+	stderrStr := stderr.String()
+	
+	if stdoutStr != "" {
+		result.WriteString("STDOUT:\n")
+		result.WriteString(stdoutStr)
+		if !strings.HasSuffix(stdoutStr, "\n") {
+			result.WriteString("\n")
+		}
+	}
+	
+	if stderrStr != "" {
+		if stdoutStr != "" {
+			result.WriteString("\n")
+		}
+		result.WriteString("STDERR:\n")
+		result.WriteString(stderrStr)
+		if !strings.HasSuffix(stderrStr, "\n") {
+			result.WriteString("\n")
+		}
+	}
+	
+	if stdoutStr == "" && stderrStr == "" {
+		result.WriteString("(no output)")
+	}
+	
+	return result.String(), exitCode, err
 }
 
 func (e *Executor) listContexts() []Context {

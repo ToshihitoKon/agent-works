@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -116,45 +117,35 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				currentContextName := m.contexts[m.cursor].Name
 				context := m.executor.config.Contexts[currentContextName]
 				
-				if context.Status == "active" {
-					context.Status = "inactive"
-					context.LastError = false
-					m.lastOutput = "Deactivated: " + context.Label
-				} else {
-					if activateCmd, exists := context.Commands["activate"]; exists {
-						output, err := m.executor.executeCommandWithOutput(activateCmd, context.Variables)
-						if err != nil {
-							context.LastError = true
-							m.lastOutput = fmt.Sprintf("Error executing command: %v\n\nOutput:\n%s", err, output)
-						} else {
-							context.Status = "active"
-							context.LastError = false
-							m.lastOutput = fmt.Sprintf("Activated: %s\n\nCommand output:\n%s", context.Label, output)
+				if runCmd, exists := context.Commands["run"]; exists {
+					output, exitCode, err := m.executor.executeJobWithOutput(runCmd, context.Variables)
+					
+					result := &ExecutionResult{
+						Timestamp: time.Now(),
+						Success:   err == nil && exitCode == 0,
+						ExitCode:  exitCode,
+						Output:    output,
+					}
+					
+					context.LastResult = result
+					m.executor.config.Contexts[currentContextName] = context
+					m.executor.config.save()
+					
+					oldCursor := m.cursor
+					m.contexts = m.executor.listContexts()
+					
+					for i, ctx := range m.contexts {
+						if ctx.Name == currentContextName {
+							m.cursor = i
+							break
 						}
-					} else {
-						context.Status = "active"
-						context.LastError = false
-						m.lastOutput = "Activated: " + context.Label
 					}
-				}
-				
-				m.executor.config.Contexts[currentContextName] = context
-				m.executor.config.save()
-				
-				oldCursor := m.cursor
-				m.contexts = m.executor.listContexts()
-				
-				for i, ctx := range m.contexts {
-					if ctx.Name == currentContextName {
-						m.cursor = i
-						break
-					}
-				}
-				
-				if m.cursor >= len(m.contexts) {
-					m.cursor = oldCursor
+					
 					if m.cursor >= len(m.contexts) {
-						m.cursor = len(m.contexts) - 1
+						m.cursor = oldCursor
+						if m.cursor >= len(m.contexts) {
+							m.cursor = len(m.contexts) - 1
+						}
 					}
 				}
 			}
@@ -218,14 +209,13 @@ func (m *model) View() string {
 				cursor = ">"
 			}
 
-			checkbox := "[ ]"
-			if context.Status == "active" {
-				checkbox = "[x]"
-			}
-
-			errorIcon := ""
-			if context.LastError {
-				errorIcon = " ✗"
+			statusIcon := " "
+			if context.LastResult != nil {
+				if context.LastResult.Success {
+					statusIcon = "✓"
+				} else {
+					statusIcon = "✗"
+				}
 			}
 
 			style := lipgloss.NewStyle()
@@ -233,8 +223,8 @@ func (m *model) View() string {
 				style = selectedStyle
 			}
 
-			line := fmt.Sprintf("%s %s%s %s", 
-				cursor, checkbox, errorIcon, context.Label)
+			line := fmt.Sprintf("%s [%s] %s", 
+				cursor, statusIcon, context.Label)
 			
 			if context.Description != "" {
 				line += fmt.Sprintf(" - %s", context.Description)
@@ -255,13 +245,49 @@ func (m *model) View() string {
 		}
 	}
 
-	topContent.WriteString("\n↑/↓ or j/k: navigate • space: toggle • q: quit")
+	topContent.WriteString("\n↑/↓ or j/k: navigate • space: execute • q: quit")
 
-	bottomContent.WriteString(outputTitleStyle.Render("Command Output"))
+	bottomContent.WriteString(outputTitleStyle.Render("Job Details"))
 	bottomContent.WriteString("\n")
 	bottomContent.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 	
-	output := m.lastOutput
+	var output string
+	if len(m.contexts) > 0 && m.cursor < len(m.contexts) {
+		selectedContext := m.contexts[m.cursor]
+		
+		// Show job information
+		output = fmt.Sprintf("Name: %s\n", selectedContext.Name)
+		output += fmt.Sprintf("Label: %s\n", selectedContext.Label)
+		if selectedContext.Description != "" {
+			output += fmt.Sprintf("Description: %s\n", selectedContext.Description)
+		}
+		
+		if cmd, exists := selectedContext.Commands["run"]; exists {
+			output += fmt.Sprintf("Command: %s\n", cmd)
+		}
+		
+		if len(selectedContext.Variables) > 0 {
+			output += "\nVariables:\n"
+			for k, v := range selectedContext.Variables {
+				output += fmt.Sprintf("  %s = %s\n", k, v)
+			}
+		}
+		
+		if selectedContext.LastResult != nil {
+			output += "\nLast Execution:\n"
+			output += fmt.Sprintf("  Time: %s\n", selectedContext.LastResult.Timestamp.Format("2006-01-02 15:04:05"))
+			output += fmt.Sprintf("  Status: %s (Exit Code: %d)\n", 
+				map[bool]string{true: "SUCCESS", false: "FAILED"}[selectedContext.LastResult.Success],
+				selectedContext.LastResult.ExitCode)
+			if selectedContext.LastResult.Output != "" {
+				output += fmt.Sprintf("  Output:\n%s\n", selectedContext.LastResult.Output)
+			}
+		} else {
+			output += "\nNever executed"
+		}
+	} else {
+		output = "No job selected"
+	}
 	contentWidth := m.width - 4 - 4  // total width - borders - padding
 	contentHeight := bottomHeight - 4  // title + separator + spacing + buffer
 	

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"text/tabwriter"
+	"time"
 )
 
 type CLI struct {
@@ -34,6 +35,12 @@ func (c *CLI) Run(args []string) error {
 			return fmt.Errorf("context name required")
 		}
 		return c.switchContext(args[2])
+	case "run":
+		if len(args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: %s run <job-name>\n", args[0])
+			return fmt.Errorf("job name required")
+		}
+		return c.runJob(args[2])
 	case "add":
 		return c.addContext(args[2:])
 	case "remove", "rm":
@@ -62,6 +69,7 @@ Commands:
   list, ls              List all contexts
   current               Show current context
   switch, sw <name>     Switch to context
+  run <name>            Execute job with execution history
   add                   Add new context (interactive)
   remove, rm <name>     Remove context
   tui                   Start TUI mode
@@ -70,7 +78,7 @@ Commands:
 Examples:
   any-context-switcher init
   any-context-switcher list
-  any-context-switcher switch development
+  any-context-switcher run monitoring
   any-context-switcher tui
 `)
 }
@@ -84,8 +92,8 @@ func (c *CLI) listContexts() error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tLABEL\tSTATUS\tDESCRIPTION")
-	fmt.Fprintln(w, "----\t-----\t------\t-----------")
+	fmt.Fprintln(w, "NAME\tLABEL\tLAST RUN\tDESCRIPTION")
+	fmt.Fprintln(w, "----\t-----\t--------\t-----------")
 
 	current := c.executor.getCurrentContext()
 	for _, context := range contexts {
@@ -93,8 +101,18 @@ func (c *CLI) listContexts() error {
 		if current != nil && current.Name == context.Name {
 			marker = "*"
 		}
+		
+		lastRun := "Never"
+		if context.LastResult != nil {
+			if context.LastResult.Success {
+				lastRun = "✓ Success"
+			} else {
+				lastRun = "✗ Failed"
+			}
+		}
+		
 		fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\n", 
-			marker, context.Name, context.Label, context.Status, context.Description)
+			marker, context.Name, context.Label, lastRun, context.Description)
 	}
 	
 	return w.Flush()
@@ -109,9 +127,19 @@ func (c *CLI) showCurrent() error {
 
 	fmt.Printf("Current context: %s\n", current.Name)
 	fmt.Printf("Label: %s\n", current.Label)
-	fmt.Printf("Status: %s\n", current.Status)
 	if current.Description != "" {
 		fmt.Printf("Description: %s\n", current.Description)
+	}
+	
+	if current.LastResult != nil {
+		fmt.Printf("Last execution: %s\n", current.LastResult.Timestamp.Format("2006-01-02 15:04:05"))
+		if current.LastResult.Success {
+			fmt.Printf("Status: ✓ Success (Exit Code: %d)\n", current.LastResult.ExitCode)
+		} else {
+			fmt.Printf("Status: ✗ Failed (Exit Code: %d)\n", current.LastResult.ExitCode)
+		}
+	} else {
+		fmt.Printf("Status: Never executed\n")
 	}
 	
 	return nil
@@ -126,17 +154,55 @@ func (c *CLI) switchContext(name string) error {
 	return nil
 }
 
+func (c *CLI) runJob(name string) error {
+	context, exists := c.executor.config.Contexts[name]
+	if !exists {
+		return fmt.Errorf("job '%s' not found", name)
+	}
+
+	runCmd, exists := context.Commands["run"]
+	if !exists {
+		return fmt.Errorf("job '%s' has no run command", name)
+	}
+
+	fmt.Printf("Executing job: %s\n", context.Label)
+	output, exitCode, err := c.executor.executeJobWithOutput(runCmd, context.Variables)
+	
+	// Save execution result
+	result := &ExecutionResult{
+		Timestamp: time.Now(),
+		Success:   err == nil && exitCode == 0,
+		ExitCode:  exitCode,
+		Output:    output,
+	}
+	
+	context.LastResult = result
+	c.executor.config.Contexts[name] = context
+	c.executor.config.save()
+	
+	fmt.Printf("\nJob execution completed:\n")
+	fmt.Printf("Exit Code: %d\n", exitCode)
+	if result.Success {
+		fmt.Printf("Status: ✓ Success\n")
+	} else {
+		fmt.Printf("Status: ✗ Failed\n")
+	}
+	
+	fmt.Printf("\nOutput:\n%s\n", output)
+	
+	return nil
+}
+
 func (c *CLI) addContext(args []string) error {
 	fs := flag.NewFlagSet("add", flag.ExitOnError)
 	name := fs.String("name", "", "Context name (required)")
 	label := fs.String("label", "", "Context label (required)")
 	description := fs.String("description", "", "Context description")
-	status := fs.String("status", "inactive", "Context status")
 	
 	fs.Parse(args)
 	
 	if *name == "" || *label == "" {
-		fmt.Fprintf(os.Stderr, "Usage: any-context-switcher add -name <name> -label <label> [-description <desc>] [-status <status>]\n")
+		fmt.Fprintf(os.Stderr, "Usage: any-context-switcher add -name <name> -label <label> [-description <desc>]\n")
 		return fmt.Errorf("name and label are required")
 	}
 
@@ -144,7 +210,6 @@ func (c *CLI) addContext(args []string) error {
 		Name:        *name,
 		Label:       *label,
 		Description: *description,
-		Status:      *status,
 		Commands:    make(map[string]string),
 		Variables:   make(map[string]string),
 	}
@@ -213,9 +278,8 @@ func (c *CLI) initConfig() error {
 				Name:        "docker",
 				Label:       "Docker Services",
 				Description: "Start/stop Docker containers",
-				Status:      "inactive",
 				Commands: map[string]string{
-					"activate": "docker-compose up -d && echo 'Docker services started'",
+					"run": "docker-compose up -d && echo 'Docker services started'",
 				},
 				Variables: map[string]string{
 					"COMPOSE_FILE": "docker-compose.yml",
@@ -226,9 +290,8 @@ func (c *CLI) initConfig() error {
 				Name:        "vpn",
 				Label:       "VPN Connection",
 				Description: "Connect to company VPN",
-				Status:      "inactive",
 				Commands: map[string]string{
-					"activate": "echo 'Connecting to VPN: ${VPN_SERVER}' && ping -c 1 ${VPN_SERVER}",
+					"run": "echo 'Connecting to VPN: ${VPN_SERVER}' && ping -c 1 ${VPN_SERVER}",
 				},
 				Variables: map[string]string{
 					"VPN_SERVER": "vpn.company.com",
@@ -239,9 +302,8 @@ func (c *CLI) initConfig() error {
 				Name:        "database",
 				Label:       "Database Tunnel",
 				Description: "SSH tunnel to database server",
-				Status:      "inactive",
 				Commands: map[string]string{
-					"activate": "echo 'Setting up SSH tunnel to ${DB_HOST}:${DB_PORT}' && nc -z ${DB_HOST} ${DB_PORT}",
+					"run": "echo 'Setting up SSH tunnel to ${DB_HOST}:${DB_PORT}' && nc -z ${DB_HOST} ${DB_PORT}",
 				},
 				Variables: map[string]string{
 					"DB_HOST": "database.company.com",
@@ -253,9 +315,8 @@ func (c *CLI) initConfig() error {
 				Name:        "monitoring",
 				Label:       "System Monitoring",
 				Description: "Enable system monitoring tools",
-				Status:      "active",
 				Commands: map[string]string{
-					"activate": "echo 'Monitoring enabled: CPU, Memory, Disk' && ps aux | grep -E '(htop|top|iostat)' | head -3",
+					"run": "echo 'Monitoring enabled: CPU, Memory, Disk' && ps aux | grep -E '(htop|top|iostat)' | head -3",
 				},
 				Variables: map[string]string{
 					"MONITOR_INTERVAL": "5",
@@ -266,9 +327,8 @@ func (c *CLI) initConfig() error {
 				Name:        "proxy",
 				Label:       "HTTP Proxy",
 				Description: "Route traffic through proxy server",
-				Status:      "inactive",
 				Commands: map[string]string{
-					"activate": "export http_proxy=${PROXY_URL} && export https_proxy=${PROXY_URL} && echo 'Proxy configured: ${PROXY_URL}'",
+					"run": "export http_proxy=${PROXY_URL} && export https_proxy=${PROXY_URL} && echo 'Proxy configured: ${PROXY_URL}'",
 				},
 				Variables: map[string]string{
 					"PROXY_URL": "http://proxy.company.com:8080",

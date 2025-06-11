@@ -4,16 +4,23 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 )
 
+type ExecutionResult struct {
+	Timestamp   time.Time `json:"timestamp"`
+	Success     bool      `json:"success"`
+	ExitCode    int       `json:"exit_code"`
+	Output      string    `json:"output,omitempty"`
+}
+
 type Context struct {
-	Name        string            `json:"name"`
-	Label       string            `json:"label"`
-	Description string            `json:"description,omitempty"`
-	Status      string            `json:"status"`
-	Commands    map[string]string `json:"commands"`
-	Variables   map[string]string `json:"variables,omitempty"`
-	LastError   bool              `json:"last_error,omitempty"`
+	Name         string            `json:"name"`
+	Label        string            `json:"label"`
+	Description  string            `json:"description,omitempty"`
+	Commands     map[string]string `json:"commands"`
+	Variables    map[string]string `json:"variables,omitempty"`
+	LastResult   *ExecutionResult  `json:"last_result,omitempty"`
 }
 
 type ColorTheme struct {
