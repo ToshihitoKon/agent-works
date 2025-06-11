@@ -13,6 +13,7 @@ type Context struct {
 	Status      string            `json:"status"`
 	Commands    map[string]string `json:"commands"`
 	Variables   map[string]string `json:"variables,omitempty"`
+	LastError   bool              `json:"last_error,omitempty"`
 }
 
 type ColorTheme struct {

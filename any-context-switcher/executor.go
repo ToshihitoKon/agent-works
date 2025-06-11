@@ -23,13 +23,18 @@ func (e *Executor) switchContext(contextName string) error {
 		return fmt.Errorf("context '%s' not found", contextName)
 	}
 
-	e.config.CurrentContext = contextName
-
 	if activateCmd, exists := context.Commands["activate"]; exists {
 		if err := e.executeCommand(activateCmd, context.Variables); err != nil {
+			context.LastError = true
+			e.config.Contexts[contextName] = context
+			e.config.save()
 			return fmt.Errorf("failed to execute activate command: %w", err)
 		}
 	}
+
+	e.config.CurrentContext = contextName
+	context.LastError = false
+	e.config.Contexts[contextName] = context
 
 	return e.config.save()
 }

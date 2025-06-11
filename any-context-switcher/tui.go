@@ -98,17 +98,22 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				
 				if context.Status == "active" {
 					context.Status = "inactive"
+					context.LastError = false
 					m.lastOutput = "Deactivated: " + context.Label
 				} else {
-					context.Status = "active"
 					if activateCmd, exists := context.Commands["activate"]; exists {
 						output, err := m.executor.executeCommandWithOutput(activateCmd, context.Variables)
 						if err != nil {
+							context.LastError = true
 							m.lastOutput = fmt.Sprintf("Error executing command: %v\n\nOutput:\n%s", err, output)
 						} else {
+							context.Status = "active"
+							context.LastError = false
 							m.lastOutput = fmt.Sprintf("Activated: %s\n\nCommand output:\n%s", context.Label, output)
 						}
 					} else {
+						context.Status = "active"
+						context.LastError = false
 						m.lastOutput = "Activated: " + context.Label
 					}
 				}
@@ -161,13 +166,18 @@ func (m *model) View() string {
 				checkbox = "[x]"
 			}
 
+			errorIcon := ""
+			if context.LastError {
+				errorIcon = " ✗"
+			}
+
 			style := lipgloss.NewStyle()
 			if m.cursor == i {
 				style = selectedStyle
 			}
 
-			line := fmt.Sprintf("%s %s %s", 
-				cursor, checkbox, context.Label)
+			line := fmt.Sprintf("%s %s%s %s", 
+				cursor, checkbox, errorIcon, context.Label)
 			
 			if context.Description != "" {
 				line += fmt.Sprintf(" - %s", context.Description)
