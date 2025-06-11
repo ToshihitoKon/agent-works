@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 )
 
@@ -92,9 +93,17 @@ func (e *Executor) executeCommandWithOutput(command string, variables map[string
 }
 
 func (e *Executor) listContexts() []Context {
-	contexts := make([]Context, 0, len(e.config.Contexts))
-	for _, context := range e.config.Contexts {
-		contexts = append(contexts, context)
+	var names []string
+	for name := range e.config.Contexts {
+		names = append(names, name)
 	}
+	
+	sort.Strings(names)
+	
+	contexts := make([]Context, 0, len(names))
+	for _, name := range names {
+		contexts = append(contexts, e.config.Contexts[name])
+	}
+	
 	return contexts
 }

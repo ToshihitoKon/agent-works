@@ -93,8 +93,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case " ":
 			if len(m.contexts) > 0 {
-				contextName := m.contexts[m.cursor].Name
-				context := m.executor.config.Contexts[contextName]
+				currentContextName := m.contexts[m.cursor].Name
+				context := m.executor.config.Contexts[currentContextName]
 				
 				if context.Status == "active" {
 					context.Status = "inactive"
@@ -113,10 +113,25 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				
-				m.executor.config.Contexts[contextName] = context
+				m.executor.config.Contexts[currentContextName] = context
 				m.executor.config.save()
 				
+				oldCursor := m.cursor
 				m.contexts = m.executor.listContexts()
+				
+				for i, ctx := range m.contexts {
+					if ctx.Name == currentContextName {
+						m.cursor = i
+						break
+					}
+				}
+				
+				if m.cursor >= len(m.contexts) {
+					m.cursor = oldCursor
+					if m.cursor >= len(m.contexts) {
+						m.cursor = len(m.contexts) - 1
+					}
+				}
 			}
 		}
 	}
