@@ -18,16 +18,10 @@ func NewExecutor(config *Config) *Executor {
 	return &Executor{config: config}
 }
 
-func (e *Executor) switchContext(contextName string) error {
-	context, exists := e.config.Contexts[contextName]
+func (e *Executor) executeContext(contextName string) error {
+	_, exists := e.config.Contexts[contextName]
 	if !exists {
-		return fmt.Errorf("context '%s' not found", contextName)
-	}
-
-	if runCmd, exists := context.Commands["run"]; exists {
-		if err := e.executeCommand(runCmd, context.Variables); err != nil {
-			return fmt.Errorf("failed to execute run command: %w", err)
-		}
+		return fmt.Errorf("job '%s' not found", contextName)
 	}
 
 	e.config.CurrentContext = contextName

@@ -29,12 +29,12 @@ func (c *CLI) Run(args []string) error {
 		return c.listContexts()
 	case "current":
 		return c.showCurrent()
-	case "switch", "sw":
+	case "execute", "exec":
 		if len(args) < 3 {
-			fmt.Fprintf(os.Stderr, "Usage: %s switch <job-name>\n", args[0])
+			fmt.Fprintf(os.Stderr, "Usage: %s execute <job-name>\n", args[0])
 			return fmt.Errorf("job name required")
 		}
-		return c.switchContext(args[2])
+		return c.executeContext(args[2])
 	case "run":
 		if len(args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: %s run <job-name>\n", args[0])
@@ -68,7 +68,7 @@ Commands:
   init                  Initialize configuration with example jobs
   list, ls              List all jobs
   current               Show current job
-  switch, sw <name>     Switch to job
+  execute, exec <name>  Set active job context
   run <name>            Execute job with execution history
   add                   Add new job (interactive)
   remove, rm <name>     Remove job
@@ -145,12 +145,12 @@ func (c *CLI) showCurrent() error {
 	return nil
 }
 
-func (c *CLI) switchContext(name string) error {
-	if err := c.executor.switchContext(name); err != nil {
+func (c *CLI) executeContext(name string) error {
+	if err := c.executor.executeContext(name); err != nil {
 		return err
 	}
 	
-	fmt.Printf("Switched to job: %s\n", name)
+	fmt.Printf("Set active job context: %s\n", name)
 	return nil
 }
 

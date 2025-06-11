@@ -57,7 +57,7 @@ chmod +x go-cmdeck
 | `init` | Initialize configuration with example jobs |
 | `list`, `ls` | List all jobs with execution status |
 | `current` | Show current job with execution details |
-| `switch`, `sw <name>` | Switch to job context |
+| `execute`, `exec <name>` | Execute job in context |
 | `run <name>` | Execute job and record execution history |
 | `add` | Add new job (interactive) |
 | `remove`, `rm <name>` | Remove job |
