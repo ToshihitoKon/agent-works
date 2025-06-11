@@ -15,9 +15,17 @@ type Context struct {
 	Variables   map[string]string `json:"variables,omitempty"`
 }
 
+type ColorTheme struct {
+	Title        string `json:"title"`
+	Selected     string `json:"selected"`
+	Border       string `json:"border"`
+	OutputTitle  string `json:"output_title"`
+}
+
 type Config struct {
 	CurrentContext string             `json:"current_context"`
 	Contexts       map[string]Context `json:"contexts"`
+	Theme          ColorTheme         `json:"theme"`
 }
 
 func getConfigPath() (string, error) {
@@ -38,6 +46,12 @@ func loadConfig() (*Config, error) {
 		return &Config{
 			CurrentContext: "",
 			Contexts:       make(map[string]Context),
+			Theme: ColorTheme{
+				Title:       "205",
+				Selected:    "199",
+				Border:      "168",
+				OutputTitle: "212",
+			},
 		}, nil
 	}
 
@@ -49,6 +63,15 @@ func loadConfig() (*Config, error) {
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
+	}
+
+	if config.Theme.Title == "" {
+		config.Theme = ColorTheme{
+			Title:       "205",
+			Selected:    "199",
+			Border:      "168", 
+			OutputTitle: "212",
+		}
 	}
 
 	return &config, nil

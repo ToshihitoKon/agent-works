@@ -18,22 +18,38 @@ type model struct {
 	cursor       int
 	selected     map[int]struct{}
 	currentView  string
+	lastOutput   string
+	showOutput   bool
+	theme        ColorTheme
 }
 
-var (
+func getStyles(theme ColorTheme) (titleStyle, selectedStyle, topPanelStyle, bottomPanelStyle, outputTitleStyle lipgloss.Style) {
 	titleStyle = lipgloss.NewStyle().
-			MarginLeft(2).
-			Foreground(lipgloss.Color("86"))
+		MarginLeft(2).
+		Foreground(lipgloss.Color(theme.Title))
 
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("170")).
-			Bold(true)
+		Foreground(lipgloss.Color(theme.Selected)).
+		Bold(true)
 
-	currentStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("212")).
-			Bold(true).
-			Background(lipgloss.Color("57"))
-)
+	topPanelStyle = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(theme.Border)).
+		Padding(1, 2).
+		Height(15)
+
+	bottomPanelStyle = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(theme.Border)).
+		Padding(1, 2).
+		Height(10)
+
+	outputTitleStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(theme.OutputTitle)).
+		Bold(true)
+
+	return
+}
 
 func NewTUI(executor *Executor) *TUI {
 	return &TUI{executor: executor}
@@ -47,6 +63,9 @@ func (t *TUI) Run() error {
 		contexts:    contexts,
 		selected:    make(map[int]struct{}),
 		currentView: "list",
+		lastOutput:  "Ready to execute commands...",
+		showOutput:  true,
+		theme:       t.executor.config.Theme,
 	}
 
 	p := tea.NewProgram(&m, tea.WithAltScreen())
@@ -72,13 +91,32 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor < len(m.contexts)-1 {
 				m.cursor++
 			}
-		case "enter", " ":
+		case " ":
 			if len(m.contexts) > 0 {
 				contextName := m.contexts[m.cursor].Name
-				if err := m.executor.switchContext(contextName); err != nil {
-					return m, tea.Quit
+				context := m.executor.config.Contexts[contextName]
+				
+				if context.Status == "active" {
+					context.Status = "inactive"
+					m.lastOutput = "Deactivated: " + context.Label
+				} else {
+					context.Status = "active"
+					if activateCmd, exists := context.Commands["activate"]; exists {
+						output, err := m.executor.executeCommandWithOutput(activateCmd, context.Variables)
+						if err != nil {
+							m.lastOutput = fmt.Sprintf("Error executing command: %v\n\nOutput:\n%s", err, output)
+						} else {
+							m.lastOutput = fmt.Sprintf("Activated: %s\n\nCommand output:\n%s", context.Label, output)
+						}
+					} else {
+						m.lastOutput = "Activated: " + context.Label
+					}
 				}
-				return m, tea.Quit
+				
+				m.executor.config.Contexts[contextName] = context
+				m.executor.config.save()
+				
+				m.contexts = m.executor.listContexts()
 			}
 		}
 	}
@@ -86,45 +124,54 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) View() string {
-	var b strings.Builder
+	var topContent strings.Builder
+	var bottomContent strings.Builder
 
-	b.WriteString(titleStyle.Render("Any Context Switcher"))
-	b.WriteString("\n\n")
+	titleStyle, selectedStyle, topPanelStyle, bottomPanelStyle, outputTitleStyle := getStyles(m.theme)
+
+	topContent.WriteString(titleStyle.Render("Context Switcher"))
+	topContent.WriteString("\n\n")
 
 	if len(m.contexts) == 0 {
-		b.WriteString("No contexts available.\n")
-		b.WriteString("\nPress q to quit.")
-		return b.String()
+		topContent.WriteString("No contexts available.")
+	} else {
+		for i, context := range m.contexts {
+			cursor := " "
+			if m.cursor == i {
+				cursor = ">"
+			}
+
+			checkbox := "[ ]"
+			if context.Status == "active" {
+				checkbox = "[x]"
+			}
+
+			style := lipgloss.NewStyle()
+			if m.cursor == i {
+				style = selectedStyle
+			}
+
+			line := fmt.Sprintf("%s %s %s", 
+				cursor, checkbox, context.Label)
+			
+			if context.Description != "" {
+				line += fmt.Sprintf(" - %s", context.Description)
+			}
+
+			topContent.WriteString(style.Render(line))
+			topContent.WriteString("\n")
+		}
 	}
 
-	current := m.executor.getCurrentContext()
-	
-	for i, context := range m.contexts {
-		cursor := " "
-		if m.cursor == i {
-			cursor = ">"
-		}
+	topContent.WriteString("\n↑/↓ or j/k: navigate • space: toggle • q: quit")
 
-		style := lipgloss.NewStyle()
-		if current != nil && current.Name == context.Name {
-			style = currentStyle
-		} else if m.cursor == i {
-			style = selectedStyle
-		}
+	bottomContent.WriteString(outputTitleStyle.Render("Command Output"))
+	bottomContent.WriteString("\n")
+	bottomContent.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	bottomContent.WriteString(m.lastOutput)
 
-		line := fmt.Sprintf("%s %s (%s) - %s", 
-			cursor, context.Label, context.Name, context.Status)
-		
-		if context.Description != "" {
-			line += fmt.Sprintf(" | %s", context.Description)
-		}
+	topPanel := topPanelStyle.Render(topContent.String())
+	bottomPanel := bottomPanelStyle.Render(bottomContent.String())
 
-		b.WriteString(style.Render(line))
-		b.WriteString("\n")
-	}
-
-	b.WriteString("\n")
-	b.WriteString("↑/↓ or j/k: navigate • enter/space: switch • q: quit")
-
-	return b.String()
+	return lipgloss.JoinVertical(lipgloss.Left, topPanel, bottomPanel)
 }

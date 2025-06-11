@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -62,6 +63,32 @@ func (e *Executor) getCurrentContext() *Context {
 	}
 	
 	return nil
+}
+
+func (e *Executor) executeCommandWithOutput(command string, variables map[string]string) (string, error) {
+	expandedCommand := e.expandVariables(command, variables)
+	
+	cmd := exec.Command("sh", "-c", expandedCommand)
+	
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	
+	output := stdout.String()
+	if stderr.Len() > 0 {
+		if output != "" {
+			output += "\n"
+		}
+		output += "STDERR:\n" + stderr.String()
+	}
+	
+	if output == "" && err == nil {
+		output = "(no output)"
+	}
+	
+	return output, err
 }
 
 func (e *Executor) listContexts() []Context {

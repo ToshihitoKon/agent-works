@@ -22,6 +22,8 @@ func (c *CLI) Run(args []string) error {
 	}
 
 	switch args[1] {
+	case "init":
+		return c.initConfig()
 	case "list", "ls":
 		return c.listContexts()
 	case "current":
@@ -56,6 +58,7 @@ func (c *CLI) showUsage() {
 	fmt.Printf(`Usage: any-context-switcher <command> [arguments]
 
 Commands:
+  init                  Initialize configuration with example contexts
   list, ls              List all contexts
   current               Show current context
   switch, sw <name>     Switch to context
@@ -65,6 +68,7 @@ Commands:
   help                  Show this help
 
 Examples:
+  any-context-switcher init
   any-context-switcher list
   any-context-switcher switch development
   any-context-switcher tui
@@ -176,4 +180,117 @@ func (c *CLI) removeContext(name string) error {
 func (c *CLI) startTUI() error {
 	tui := NewTUI(c.executor)
 	return tui.Run()
+}
+
+func (c *CLI) initConfig() error {
+	configPath, err := getConfigPath()
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(configPath); err == nil {
+		fmt.Printf("Configuration file already exists at: %s\n", configPath)
+		fmt.Print("Do you want to overwrite it? (y/N): ")
+		
+		var response string
+		fmt.Scanln(&response)
+		if response != "y" && response != "Y" {
+			fmt.Println("Initialization cancelled.")
+			return nil
+		}
+	}
+
+	exampleConfig := &Config{
+		CurrentContext: "",
+		Theme: ColorTheme{
+			Title:       "205",
+			Selected:    "199", 
+			Border:      "168",
+			OutputTitle: "212",
+		},
+		Contexts: map[string]Context{
+			"docker": {
+				Name:        "docker",
+				Label:       "Docker Services",
+				Description: "Start/stop Docker containers",
+				Status:      "inactive",
+				Commands: map[string]string{
+					"activate": "docker-compose up -d && echo 'Docker services started'",
+				},
+				Variables: map[string]string{
+					"COMPOSE_FILE": "docker-compose.yml",
+					"PROJECT_NAME": "myapp",
+				},
+			},
+			"vpn": {
+				Name:        "vpn",
+				Label:       "VPN Connection",
+				Description: "Connect to company VPN",
+				Status:      "inactive",
+				Commands: map[string]string{
+					"activate": "echo 'Connecting to VPN: ${VPN_SERVER}' && ping -c 1 ${VPN_SERVER}",
+				},
+				Variables: map[string]string{
+					"VPN_SERVER": "vpn.company.com",
+					"VPN_CONFIG": "~/.config/vpn/company.conf",
+				},
+			},
+			"database": {
+				Name:        "database",
+				Label:       "Database Tunnel",
+				Description: "SSH tunnel to database server",
+				Status:      "inactive",
+				Commands: map[string]string{
+					"activate": "echo 'Setting up SSH tunnel to ${DB_HOST}:${DB_PORT}' && nc -z ${DB_HOST} ${DB_PORT}",
+				},
+				Variables: map[string]string{
+					"DB_HOST": "database.company.com",
+					"DB_PORT": "5432",
+					"LOCAL_PORT": "5433",
+				},
+			},
+			"monitoring": {
+				Name:        "monitoring",
+				Label:       "System Monitoring",
+				Description: "Enable system monitoring tools",
+				Status:      "active",
+				Commands: map[string]string{
+					"activate": "echo 'Monitoring enabled: CPU, Memory, Disk' && ps aux | grep -E '(htop|top|iostat)' | head -3",
+				},
+				Variables: map[string]string{
+					"MONITOR_INTERVAL": "5",
+					"LOG_PATH": "/var/log/monitoring",
+				},
+			},
+			"proxy": {
+				Name:        "proxy",
+				Label:       "HTTP Proxy",
+				Description: "Route traffic through proxy server",
+				Status:      "inactive",
+				Commands: map[string]string{
+					"activate": "export http_proxy=${PROXY_URL} && export https_proxy=${PROXY_URL} && echo 'Proxy configured: ${PROXY_URL}'",
+				},
+				Variables: map[string]string{
+					"PROXY_URL": "http://proxy.company.com:8080",
+					"NO_PROXY": "localhost,127.0.0.1,.local",
+				},
+			},
+		},
+	}
+
+	if err := exampleConfig.save(); err != nil {
+		return fmt.Errorf("failed to save configuration: %w", err)
+	}
+
+	fmt.Printf("Configuration initialized at: %s\n", configPath)
+	fmt.Println("Example tool contexts created:")
+	fmt.Println("  - docker: Docker Services")
+	fmt.Println("  - vpn: VPN Connection")
+	fmt.Println("  - database: Database Tunnel")
+	fmt.Println("  - monitoring: System Monitoring (active)")
+	fmt.Println("  - proxy: HTTP Proxy")
+	fmt.Println("\nRun 'any-context-switcher list' to see all contexts.")
+	fmt.Println("Run 'any-context-switcher tui' to use the interactive interface.")
+
+	return nil
 }
