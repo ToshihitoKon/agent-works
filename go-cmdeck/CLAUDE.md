@@ -77,3 +77,40 @@ Go CmDeck is a Rundeck-style CLI/TUI job execution management tool written in Go
 - Maintain backwards compatibility for configuration format
 - Add tests for core functionality when extending features
 - Use the existing styling patterns for TUI components
+
+## Development History & Important Context
+
+### Project Evolution
+- **Origin**: Started as "any-context-switcher" for context management
+- **Transformation**: Evolved to "go-cmdeck" - a Rundeck-style job execution tool
+- **Key Insight**: User recognized similarity to Rundeck and requested paradigm shift from state management to job execution tracking
+
+### Architecture Decisions
+- **Unified Commands**: Both `execute` and `run` commands perform job execution with history tracking
+- **No Current Context**: Removed CurrentContext concept from config - tool focuses on execution rather than state management
+- **Execution History**: ExecutionResult struct tracks timestamp, success/failure, exit codes, and full output
+- **TUI Status Icons**: Uses ✓/✗ icons instead of checkboxes to show execution status
+
+### Recent Refactoring (2025-06-12)
+- **switch → execute**: Renamed switch command to execute for clarity (context switching remnant)
+- **Removed current command**: Eliminated current subcommand as it was context switching legacy
+- **Simplified config**: Removed CurrentContext field from Config struct
+- **Documentation**: Updated all docs to reflect job execution paradigm
+
+### Key Implementation Details
+- **Variable Substitution**: Uses `${VAR}` syntax for environment variable expansion
+- **Exit Code Handling**: Properly captures exit codes using syscall.WaitStatus
+- **Output Separation**: Distinguishes STDOUT and STDERR in execution results
+- **Error Resilience**: Handles command execution failures gracefully with detailed reporting
+
+### Testing Notes
+- Always run `go build -o go-cmdeck` to verify compilation
+- Test both CLI and TUI interfaces after changes
+- Verify variable substitution works correctly
+- Check execution history persistence across restarts
+
+### Future Considerations
+- Consider adding job scheduling capabilities
+- Implement job dependencies/pipelines
+- Add more detailed execution metrics
+- Consider adding job templates or inheritance
